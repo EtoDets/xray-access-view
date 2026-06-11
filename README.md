@@ -11,7 +11,7 @@
 
 ## Особенности
 
-- **Гибкость:** Укажите кастомный путь к логам или используйте путь по умолчанию (`/var/lib/marzban/access.log`).
+- **Гибкость:** Укажите кастомный путь к логам или используйте путь по умолчанию (`/var/log/xray/access.log`).
 - **Режимы отображения:**
   - **Основной режим:** Отображает список доменов и IP-адресов по каждому Email.
   - **Режим сводки:** С помощью параметра `--summary` выводит только уникальные IP-адреса для каждого Email.
@@ -29,36 +29,36 @@ apt install python3-geoip2
 
 ### Запуск в основном режиме
 ```bash
-python3 <(curl -sL https://github.com/Davoyan/xray-access-view/raw/main/view.py)
+python3 <(curl -sL https://github.com/EtoDets/xray-access-view/raw/main/view.py)
 ```
 ![image](static/output.jpg)
 
 ### Запуск в основном режиме с выводом не только доменов, но и ip
 ```bash
-python3 <(curl -sL https://github.com/Davoyan/xray-access-view/raw/main/view.py) --ip
+python3 <(curl -sL https://github.com/EtoDets/xray-access-view/raw/main/view.py) --ip
 ```
 
 ### Запуск в режиме сводки
 ```bash
-python3 <(curl -sL https://github.com/Davoyan/xray-access-view/raw/main/view.py) --summary
+python3 <(curl -sL https://github.com/EtoDets/xray-access-view/raw/main/view.py) --summary
 ```
 ![image](static/summary-output.jpg)
 
 ### Запуск в режиме сводки, с выводом только тех ip, что сейчас подключены к серверу
 ```bash
-python3 <(curl -sL https://github.com/Davoyan/xray-access-view/raw/main/view.py) --online
+python3 <(curl -sL https://github.com/EtoDets/xray-access-view/raw/main/view.py) --online
 ```
 ---
 #### Доступ к логам
-По умолчанию используется путь '/var/lib/marzban/access.log', если вы хотите использовать свой путь, во время запуска скрипта следуйте следующему:
+По умолчанию используется путь '/var/log/xray/access.log', если вы хотите использовать свой путь, во время запуска скрипта следуйте следующему:
 ```
-Укажите путь до логов (нажмите Enter для использования '/var/lib/marzban/access.log'): /my/path/access.log
+Укажите путь до логов (нажмите Enter для использования '/var/log/xray/access.log'): /my/path/access.log
 ```
 
 В конфигурации xray у вас должены быть прописаны access логи, пример:
 ```Пример
 "log": {
-    "access": "/var/lib/marzban/access.log",
+    "access": "/var/log/xray/access.log",
     "loglevel": "warning",
 },
 ```
