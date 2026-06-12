@@ -4,17 +4,15 @@ import re
 import urllib.request
 from argparse import Namespace
 from collections import defaultdict
+from datetime import datetime, timedelta
 from enum import Enum
-
 import geoip2.database
 
 region_asn_cache = {}
 
-
 class TextStyle(Enum):
     RESET = 0
     BOLD = 1
-
 
 class TextColor(Enum):
     BLACK = 30
@@ -34,7 +32,6 @@ class TextColor(Enum):
     BRIGHT_CYAN = 96
     BRIGHT_WHITE = 97
 
-
 def color_text(text: str, color: TextColor) -> str:
     return f"\033[{color.value}m{text}\033[{TextStyle.RESET.value}m"
 
@@ -44,9 +41,7 @@ def style_text(text: str, style: TextStyle) -> str:
 
 
 def get_log_file_path() -> str:
-    default_log_file_path = "/var/log/xray/access.log"
-    if os.path.exists(default_log_file_path):
-        return default_log_file_path
+    default_log_file_path = "/usr/local/x-ui/access.log"
     while True:
         user_input_path = input(
             f"Укажите путь до логов (нажмите Enter для использования '{default_log_file_path}'): "
@@ -62,21 +57,32 @@ def get_log_file_path() -> str:
 def clear_screen():
     os.system('clear' if os.name == 'posix' else 'cls')
 
-
 def download_geoip_db(db_url: str, db_path: str, without_update: bool):
-    import time
-    if os.path.exists(db_path):
+    """Загружает GeoIP базу только если файл отсутствует или старше 7 дней"""
+    needs_download = False
+    
+    if not os.path.exists(db_path):
+        needs_download = True
+    else:
         if without_update:
             return
-        age_days = (time.time() - os.path.getmtime(db_path)) / 86400
-        if age_days < 2:
-            return
-        print(f"{color_text('Удаление старой базы данных:', TextColor.BRIGHT_YELLOW)} {db_path}")
-        os.remove(db_path)
-    print(color_text(f"Скачивание базы данных из {db_url}...", TextColor.BRIGHT_GREEN))
-    urllib.request.urlretrieve(db_url, db_path)
-    print(color_text("Загрузка завершена.", TextColor.BRIGHT_GREEN))
-
+        
+        # Проверяем возраст файла
+        file_time = datetime.fromtimestamp(os.path.getmtime(db_path))
+        if datetime.now() - file_time > timedelta(days=7):
+            print(f"{color_text('Удаление устаревшей базы данных:', TextColor.BRIGHT_YELLOW)} {db_path}")
+            os.remove(db_path)
+            needs_download = True
+    
+    if needs_download:
+        print(color_text(f"Скачивание базы данных из {db_url}...", TextColor.BRIGHT_GREEN))
+        try:
+            urllib.request.urlretrieve(db_url, db_path)
+            print(color_text("Загрузка завершена.", TextColor.BRIGHT_GREEN))
+        except Exception as e:
+            print(color_text(f"Ошибка загрузки: {str(e)}", TextColor.RED))
+            if not os.path.exists(db_path):
+                exit(1)  # Критическая ошибка если файл не существует и не смог загрузиться
 
 def parse_log_entry(log, filter_ip_resource, city_reader, asn_reader):
     pattern = re.compile(
@@ -112,11 +118,21 @@ def parse_log_entry(log, filter_ip_resource, city_reader, asn_reader):
     return None
 
 
-def extract_email_number(email):
+def extract_email_number(email: str):
+    """
+    Возвращает кортеж для сортировки email:
+    (0, num, email) - для email с цифровым префиксом (например, "1.user@example.com")
+    (1, email)      - для обычных email без цифрового префикса
+    (2, '')         - для "Unknown Email"
+    """
     if email == "Unknown Email":
-        return float('inf')
-    match = re.match(r"(\d+)\..*", email)
-    return int(match.group(1)) if match else email
+        return (2, '')
+    match = re.match(r"^(\d+)\..*", email)
+    if match:
+        num = int(match.group(1))
+        return (0, num, email)
+    else:
+        return (1, email)
 
 
 def highlight_email(email):
@@ -279,15 +295,21 @@ def process_online_mode(logs_iterator, city_reader, asn_reader):
     else:
         print("Нет ESTABLISHED соединений, найденных в логах.")
 
-
 def main(arguments: Namespace):
-    log_file_path = get_log_file_path()
-
-    city_db_path = "/tmp/GeoLite2-City.mmdb"
-    asn_db_path = "/tmp/GeoLite2-ASN.mmdb"
+    # Определяем директорию скрипта и создаём папку для geo баз
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    geo_dir = os.path.join(script_dir, 'geo')
+    os.makedirs(geo_dir, exist_ok=True)
+    
+    # Формируем пути к базам данных
+    city_db_path = os.path.join(geo_dir, "GeoLite2-City.mmdb")
+    asn_db_path = os.path.join(geo_dir, "GeoLite2-ASN.mmdb")
+    
+    # Корректные URL без лишних пробелов
     city_db_url = "https://github.com/P3TERX/GeoLite.mmdb/raw/download/GeoLite2-City.mmdb"
     asn_db_url = "https://github.com/P3TERX/GeoLite.mmdb/raw/download/GeoLite2-ASN.mmdb"
 
+    # Загружаем базы с учётом условий
     download_geoip_db(city_db_url, city_db_path, arguments.without_geolite_update)
     download_geoip_db(asn_db_url, asn_db_path, arguments.without_geolite_update)
 
@@ -297,6 +319,8 @@ def main(arguments: Namespace):
             filter_ip_resource = False
 
         clear_screen()
+
+        log_file_path = get_log_file_path()
 
         if arguments.online:
             with open(log_file_path, "r") as file:
@@ -312,7 +336,6 @@ def main(arguments: Namespace):
             with open(log_file_path, "r") as file:
                 sorted_data = process_logs(file, city_reader, asn_reader, filter_ip_resource)
             print_sorted_logs(sorted_data)
-
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
