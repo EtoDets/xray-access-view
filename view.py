@@ -127,6 +127,49 @@ def highlight_ip(ip):
     return color_text(ip, TextColor.BLUE)
 
 
+_TAG_FIXED_COLORS = {
+    "direct":  TextColor.BRIGHT_GREEN,
+    "block":   TextColor.RED,
+    "warp":    TextColor.BRIGHT_CYAN,
+    "dns-out": TextColor.BRIGHT_YELLOW,
+    "proxy":   TextColor.BRIGHT_MAGENTA,
+}
+
+_TAG_COLORS = [
+    TextColor.BRIGHT_CYAN,
+    TextColor.BRIGHT_MAGENTA,
+    TextColor.BRIGHT_YELLOW,
+    TextColor.BRIGHT_BLUE,
+    TextColor.BRIGHT_WHITE,
+    TextColor.YELLOW,
+    TextColor.CYAN,
+    TextColor.MAGENTA,
+]
+
+
+def color_by_hash(text: str, palette: list) -> str:
+    import hashlib
+    idx = int(hashlib.md5(text.encode()).hexdigest(), 16) % len(palette)
+    return color_text(text, palette[idx])
+
+
+def _tag_color(tag: str) -> TextColor:
+    if tag in _TAG_FIXED_COLORS:
+        return _TAG_FIXED_COLORS[tag]
+    import hashlib
+    idx = int(hashlib.md5(tag.encode()).hexdigest(), 16) % len(_TAG_COLORS)
+    return _TAG_COLORS[idx]
+
+
+def highlight_destination(destination: str) -> str:
+    sep = " >> " if " >> " in destination else " -> "
+    parts = [p.strip() for p in destination.split(sep)]
+    outbound_color = _tag_color(parts[-1])
+    colored_parts = [color_text(tag, outbound_color) for tag in parts]
+    inner = sep.join(colored_parts)
+    return f"[{inner}]"
+
+
 def highlight_resource(resource):
     highlight_domains = {
         "mycdn.me", "mvk.com", "userapi.com", "vk-apps.com", "vk-cdn.me", "vk-cdn.net", "vk-portal.net", "vk.cc",
@@ -212,7 +255,7 @@ def print_sorted_logs(data):
         for ip, info in sorted(data[email].items()):
             print(f"  IP: {highlight_ip(ip)} ({info['region_asn']})")
             for resource, destination in sorted(info["resources"].items()):
-                print(f"    Resource: {highlight_resource(resource)} -> [{destination}]")
+                print(f"    {color_text('Resource:', TextColor.BRIGHT_WHITE)} {highlight_resource(resource)} -> {highlight_destination(destination)}")
 
 
 def print_summary(summary):
